@@ -12,7 +12,7 @@ I wanted to create a solution that would provide better visibility into the LSP'
 ![image](https://user-images.githubusercontent.com/347098/212483720-e6c7b782-1aa1-49ad-b45a-8502b2b9cbf5.png)
 ![image](https://user-images.githubusercontent.com/347098/212483653-e1fb1f5a-5826-400a-b79e-cba754e4fe2e.png)
 
-### Required dependencies
+### Optional dependencies
 
 - [nvim-notify](https://github.com/rcarriga/nvim-notify)
 
@@ -20,13 +20,26 @@ I wanted to create a solution that would provide better visibility into the LSP'
 
 Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
+Basinc setup will use `vim.notify()` for notifications:
 ```lua
 use {
   'mrded/nvim-lsp-notify',
-    requires = { 'rcarriga/nvim-notify' },
-    config = function()
-      require('lsp-notify').setup({})
-    end
+  config = function()
+    require('lsp-notify').setup({})
+  end
+}
+```
+
+You can also pass `notify` function, for example from [nvim-notify](https://github.com/rcarriga/nvim-notify):
+```lua
+use {
+  'mrded/nvim-lsp-notify',
+  requires = { 'rcarriga/nvim-notify' },
+  config = function()
+    require('lsp-notify').setup({
+      notify = require('notify'),
+    })
+  end
 }
 ```
 

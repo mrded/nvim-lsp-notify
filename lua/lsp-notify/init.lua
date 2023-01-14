@@ -1,4 +1,5 @@
-local notify = require('notify')
+local notify = vim.notify
+
 local client_notifs = {}
 
 local function get_notif_data(client_id, token)
@@ -64,7 +65,11 @@ vim.lsp.handlers["window/showMessage"] = function(err, method, params, client_id
 end
 
 return {
-  setup = function()
-    -- TODO: add config options
+  setup = function(opts)
+    opts = opts or {}
+
+    if opts.notify then
+      notify = opts.notify
+    end
   end
 }
