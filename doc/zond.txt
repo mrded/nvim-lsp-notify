@@ -1,0 +1,8 @@
+================================================================================
+INTRODUCTION                                                        *lsp-notify*
+
+lsp-notify is a plugin designed to keep you informed of the progress of your LSP
+(Language Server Protocol) process, providing realtime notifications and updates
+
+setup({opts})                                               *lsp-notify.setup()*
+    Configure nvim-lsp-notify
