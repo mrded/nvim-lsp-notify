@@ -20,7 +20,7 @@ I wanted to create a solution that would provide better visibility into the LSP'
 
 Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
-Basinc setup will use `vim.notify()` for notifications:
+Basic setup will use `vim.notify()` for notifications:
 ```lua
 use {
   'mrded/nvim-lsp-notify',
