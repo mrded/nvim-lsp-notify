@@ -1,11 +1,11 @@
 # nvim-lsp-notify
 
-NVIM plugin to notify about LSP progress
+NVIM plugin to notify about LSP processes
 
 ### Motivation 
 
-The motivation for this project was to address the uncertainty that can sometimes accompany the LSP process. 
-I wanted to create a solution that would provide better visibility into the LSP's progress.
+The motivation was to address the uncertainty that can sometimes accompany using LSP. 
+I wanted to create a solution that would provide better visibility into the LSP's processes.
 
 ### Examples
 ![image](https://user-images.githubusercontent.com/347098/212483632-d8a4a6d7-320e-4002-b263-6e736ac83c1d.png)
