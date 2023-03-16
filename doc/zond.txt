@@ -6,10 +6,25 @@ lsp-notify is a plugin designed to keep you informed of the progress of your LSP
 
 setup({opts})                                               *lsp-notify.setup()*
     Configure nvim-lsp-notify
-    
+
     Parameters: ~
         {opts}                (table)         options to pass to the function
 
     Options: ~
         {notify}              (function)      function to show the notification
                                               (default: 'vim.notify')
+        {icons}               (table|false)   icons to display or 'false' to
+                                              disable
+                                              (default: {
+                                                 spinner = {
+                                                   "⣾",
+                                                   "⣽",
+                                                   "⣻",
+                                                   "⢿",
+                                                   "⡿",
+                                                   "⣟",
+                                                   "⣯",
+                                                   "⣷"
+                                                 },
+                                                 done = "󰗡"
+                                              })
