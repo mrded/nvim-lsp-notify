@@ -51,12 +51,12 @@ vim.lsp.handlers["$/progress"] = function(_, result, ctx)
 
     notif_data.notification = options.notify(message, "info", {
       title = title,
-      icon = options.icons.spinner and options.icons.spinner[1] or nil,
+      icon = (options.icons and options.icons.spinner) and options.icons.spinner[1] or nil,
       timeout = false,
       hide_from_history = false,
     })
 
-    if options.icons.spinner then
+    if options.icons and options.icons.spinner then
       notif_data.spinner = 1
       update_spinner(client_id, result.token)
     end
@@ -73,7 +73,7 @@ vim.lsp.handlers["$/progress"] = function(_, result, ctx)
     local message = val.message or "Complete"
 
     notif_data.notification = options.notify(message, "info", {
-      icon = options.icons.done or nil,
+      icon = options.icons and options.icons.done or nil,
       replace = notif_data.notification,
       timeout = 3000,
     })
@@ -96,10 +96,9 @@ end
 ---@class LspNotifyConfig
 local default_options = {
   notify = vim.notify,
+  ---@type {spinner: string[] | false, done: string | false} | false
   icons = {
-    ---@type string[] | false
     spinner = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
-    ---@type string | false
     done = "󰗡"
   }
 }

@@ -2,9 +2,9 @@
 
 NVIM plugin to notify about LSP processes
 
-### Motivation 
+### Motivation
 
-The motivation was to address the uncertainty that can sometimes accompany using LSP. 
+The motivation was to address the uncertainty that can sometimes accompany using LSP.
 I wanted to create a solution that would provide better visibility into the LSP's processes.
 
 ### Examples
@@ -30,7 +30,7 @@ use {
 }
 ```
 
-You can also pass `notify` function, for example from [nvim-notify](https://github.com/rcarriga/nvim-notify):
+You can pass `notify` function, for example from [nvim-notify](https://github.com/rcarriga/nvim-notify):
 ```lua
 use {
   'mrded/nvim-lsp-notify',
@@ -38,6 +38,35 @@ use {
   config = function()
     require('lsp-notify').setup({
       notify = require('notify'),
+    })
+  end
+}
+```
+
+Or `icons` to customize icons:
+```lua
+use {
+  'mrded/nvim-lsp-notify',
+  requires = { 'rcarriga/nvim-notify' },
+  config = function()
+    require('lsp-notify').setup({
+      icons = {
+        spinner = { '|', '/', '-', '\\' },      -- `= false` to disable only this icon
+        done = '!'                              -- `= false` to disable only this icon
+      }
+    })
+  end
+}
+```
+
+Or `icons = false` to disable them completely:
+```lua
+use {
+  'mrded/nvim-lsp-notify',
+  requires = { 'rcarriga/nvim-notify' },
+  config = function()
+    require('lsp-notify').setup({
+      icons = false
     })
   end
 }

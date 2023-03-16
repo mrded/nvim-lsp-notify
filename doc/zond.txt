@@ -13,3 +13,18 @@ setup({opts})                                               *lsp-notify.setup()*
     Options: ~
         {notify}              (function)      function to show the notification
                                               (default: 'vim.notify')
+        {icons}               (table|false)   icons to display or 'false' to
+                                              disable
+                                              (default: {
+                                                 spinner = {
+                                                   "⣾",
+                                                   "⣽",
+                                                   "⣻",
+                                                   "⢿",
+                                                   "⡿",
+                                                   "⣟",
+                                                   "⣯",
+                                                   "⣷"
+                                                 },
+                                                 done = "󰗡"
+                                              })
