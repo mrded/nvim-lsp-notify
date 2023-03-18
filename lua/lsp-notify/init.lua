@@ -1,17 +1,4 @@
----@class LspTask
----@field title string
----@field message string
----@field percentage integer
-
----@class LspNotification
----@field name string
----@field spinner integer
----@field tasks {any: LspTask}
----@field notification any
----@field window any
-
-
-
+--- Options for the plugin
 ---@class LspNotifyConfig
 local options = {
   notify = vim.notify,
@@ -24,44 +11,159 @@ local options = {
 
 
 
----@type {integer: LspNotification}
-local notifications = {}
+---@class LspTask
+---@field title string
+---@field message string
+---@field percentage integer
 
-local function get_notification(client_id)
-  notifications[client_id] =
-    notifications[client_id]
-    or {
-      name = "",
-      spinner = 1,
-      tasks = {},
-      notification = nil,
-      window = nil
-    }
-  return notifications[client_id]
+---@class BaseLspNotification
+local BaseLspNotification = {
+  id = nil,
+  name = "",
+  spinner = 1,
+  ---@type {any: LspTask}
+  tasks = {},
+  notification = nil,
+  window = nil
+}
+
+---@param id integer
+---@param name string
+---@return BaseLspNotification
+function BaseLspNotification.new(id, name)
+  local self = vim.deepcopy(BaseLspNotification)
+  self.id = id
+  self.name = name
+  return self
 end
 
----@param notification LspNotification
-local function get_task(notification, task_id)
-  if not notification.tasks[task_id] then
-    notification.tasks[task_id] = {
-      title = "",
-      message = "",
-      percentage = 0
-    }
+
+function BaseLspNotification:format_title()
+  return self.name
+end
+
+---@param task LspTask
+---@return string
+function BaseLspNotification.__format_task(task)
+  return (
+    string.format(
+      "%-8s",
+      task.percentage and task.percentage .. "%" or ""
+    )
+    .. ((task.title .. " ") or "")
+    .. (task.message or "")
+  )
+end
+
+function BaseLspNotification:format_message()
+  local lines = ""
+  for _, t in pairs(self.tasks) do
+    lines = lines .. BaseLspNotification.__format_task(t) .. "\n"
   end
-  return notification.tasks[task_id]
+  return lines
 end
 
----@param notification LspNotification
-local function count_tasks(notification)
+
+function BaseLspNotification:__get_number_tasks()
   local count = 0
-  for _, v in pairs(notification.tasks) do
+  for _ in pairs(self.tasks) do
     count = count + 1
   end
   return count
 end
 
----@param notification LspNotification
+
+function BaseLspNotification:__notification_start()
+  self.notification = options.notify(
+    "Started",
+    vim.log.levels.INFO,
+    {
+      title = self:format_title(),
+      icon = (options.icons and options.icons.spinner and options.icons.spinner[1]) or nil,
+      timeout = false,
+      hide_from_history = false,
+      on_open = function(window)
+        self.window = window
+      end
+    }
+  )
+end
+
+function BaseLspNotification:__notification_progress()
+  local message = self:format_message()
+  self.notification = options.notify(
+    message,
+    vim.log.levels.INFO,
+    {
+      replace = self.notification,
+      hide_from_history = false,
+    }
+  )
+  if self.window then
+    vim.api.nvim_win_set_height(
+      self.window,
+      2 + select(2, message:gsub('\n', '\n'))
+    )
+  end
+end
+
+function BaseLspNotification:__notification_end()
+  options.notify(
+    "Completed",
+    vim.log.levels.INFO,
+    {
+      replace = self.notification,
+      icon = options.icons and options.icons.done or nil,
+      timeout = 1000
+    }
+  )
+  self.notification = nil
+  self.spinner = nil
+
+  if self.window then
+    vim.api.nvim_win_set_height(
+      self.window,
+      3
+    )
+  end
+end
+
+function BaseLspNotification:update()
+  if not self.notification then
+    self:__notification_start()
+  elseif self:__get_number_tasks() > 0 then
+    self:__notification_progress()
+  elseif self:__get_number_tasks() == 0 then
+    self:__notification_end()
+  end
+end
+
+
+function BaseLspNotification:get_task(task_id)
+  self.tasks[task_id] =
+    self.tasks[task_id]
+    or {
+      title = "",
+      message = "",
+      percentage = 0
+    }
+  return self.tasks[task_id]
+end
+
+function BaseLspNotification:schedule_kill_task(task_id)
+  vim.defer_fn(
+    function()
+      self.tasks[task_id] = nil
+      self:update()
+    end,
+    1000
+  )
+end
+
+
+
+-- TODO Move to BaseLspNotification
+---@param notification BaseLspNotification
 local function update_spinner(notification)
   if notification.spinner then
     notification.spinner = (notification.spinner % #options.icons.spinner) + 1
@@ -78,51 +180,20 @@ local function update_spinner(notification)
   end
 end
 
----@param notification LspNotification
-local function get_message(notification)
-  local lines = ""
-  for _, t in pairs(notification.tasks) do
-    lines =
-      lines
-      .. (t.percentage and t.percentage .. "\t" or "    ")
-      .. "" .. (t.title or "")
-      .. " - " .. (t.message or "")
-      .. ("\n")
-  end
-  return lines
-end
 
----@param notification LspNotification
-local function display_progress(notification)
-  if (count_tasks(notification) > 0) then
-    local message_computed = get_message(notification)
-    notification.notification = options.notify(
-      message_computed,
-      vim.log.levels.INFO,
-      {
-        replace = notification.notification,
-        hide_from_history = false,
-      }
+---@type {integer: BaseLspNotification}
+local notifications = {}
+
+---@param client_id integer
+---@return BaseLspNotification
+local function get_notification(client_id)
+  notifications[client_id] =
+    notifications[client_id]
+    or BaseLspNotification.new(
+      client_id,
+      vim.lsp.get_client_by_id(client_id).name
     )
-    vim.api.nvim_win_set_height(
-      notification.window,
-      2 + select(2, message_computed:gsub('\n', '\n'))
-    )
-  else
-    notification.notification = options.notify(
-      "Completed",
-      vim.log.levels.INFO,
-      {
-        replace = notification.notification,
-        icon = options.icons and options.icons.done or nil,
-        timeout = 1000
-      }
-    )
-    vim.api.nvim_win_set_height(
-      notification.window,
-      3
-    )
-  end
+  return notifications[client_id]
 end
 
 
@@ -132,54 +203,28 @@ local function handle_progress(_, result, context)
 
   local client_id = context.client_id
   local notification = get_notification(client_id)
-  local client = vim.lsp.get_client_by_id(client_id)
 
   local task_id = result.token
-  ---@type LspTask?
-  local task = get_task(notification, task_id)
+  local task = notification:get_task(task_id)
 
   if value.kind == "begin" then
-    task.title = value.title or "LSP"
-    task.message = value.message or "Loading ..."
+    task.title = value.title
+    task.message = value.message
 
-    if (count_tasks(notification) == 1) then
-      -- New LSP notification
-      notification.name = client.name
-      notification.notification = options.notify(
-        "Started",
-        vim.log.levels.INFO,
-        {
-          title = notification.name,
-          icon = (options.icons and options.icons.spinner) and options.icons.spinner[1] or nil,
-          timeout = false,
-          hide_from_history = false,
-          on_open = function(window)
-            notification.window = window
-          end
-        }
-      )
-    end
+    notification:update()
 
   elseif value.kind == "report" then
     task.message = value.message
     task.percentage = value.percentage
-    display_progress(notification)
+
+    notification:update()
+
   elseif value.kind == "end" then
     task.message = value.message
     task.percentage = task.percentage and 100 or nil
 
-    display_progress(notification)
-
-    vim.defer_fn(
-      function()
-        notification.tasks[task_id] = nil
-        if count_tasks(notification) == 0 then
-          display_progress(notification)
-        end
-      end,
-      1000
-    )
-
+    notification:update()
+    notification:schedule_kill_task(task_id)
   end
 end
 
