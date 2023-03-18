@@ -11,60 +11,60 @@ local options = {
 
 
 
----@class LspTask
----@field title string
----@field message string
----@field percentage integer
+--#region Task
 
----@class BaseLspNotification
-local BaseLspNotification = {
-  id = nil,
-  name = "",
-  spinner = 1,
-  ---@type {any: LspTask}
-  tasks = {},
-  notification = nil,
-  window = nil
+---@class BaseLspTask
+local BaseLspTask = {
+  ---@type string?
+  title = "",
+  ---@type string?
+  message = "",
+  ---@type number?
+  percentage = nil
 }
 
----@param id integer
+---@param title string
+---@param message string
+---@return BaseLspTask
+function BaseLspTask.new(title, message)
+  local self = vim.deepcopy(BaseLspTask)
+  self.title = title
+  self.message = message
+  return self
+end
+
+function BaseLspTask:format()
+  return (
+    ("  ")
+    .. (string.format(
+      "%-8s",
+      self.percentage and self.percentage .. "%" or ""
+    ))
+    .. (self.title .. " " or "")
+    .. (self.message or "")
+  )
+end
+
+--#endregion
+
+--#region Client
+
+---@class BaseLspClient
+local BaseLspClient = {
+  name = "",
+  ---@type {any: BaseLspTask}
+  tasks = {}
+}
+
 ---@param name string
----@return BaseLspNotification
-function BaseLspNotification.new(id, name)
-  local self = vim.deepcopy(BaseLspNotification)
-  self.id = id
+---@return BaseLspClient
+function BaseLspClient.new(name)
+  local self = vim.deepcopy(BaseLspClient)
   self.name = name
   return self
 end
 
-
-function BaseLspNotification:format_title()
-  return self.name
-end
-
----@param task LspTask
----@return string
-function BaseLspNotification.__format_task(task)
-  return (
-    string.format(
-      "%-8s",
-      task.percentage and task.percentage .. "%" or ""
-    )
-    .. ((task.title .. " ") or "")
-    .. (task.message or "")
-  )
-end
-
-function BaseLspNotification:format_message()
-  local lines = ""
-  for _, t in pairs(self.tasks) do
-    lines = lines .. BaseLspNotification.__format_task(t) .. "\n"
-  end
-  return lines
-end
-
-
-function BaseLspNotification:__get_number_tasks()
+function BaseLspClient:count_tasks()
   local count = 0
   for _ in pairs(self.tasks) do
     count = count + 1
@@ -72,10 +72,52 @@ function BaseLspNotification:__get_number_tasks()
   return count
 end
 
+function BaseLspClient:kill_task(task_id)
+  self.tasks[task_id] = nil
+end
 
-function BaseLspNotification:__notification_start()
+function BaseLspClient:format()
+  local tasks = ""
+  for _, t in pairs(self.tasks) do
+    tasks = tasks .. t:format() .. "\n"
+  end
+
+  return (
+    (self.name)
+    .. ("\n")
+    .. (tasks ~= "" and tasks:sub(1, -2) or "  Complete")
+  )
+end
+
+--#endregion
+
+--#region Notification
+
+---@class BaseLspNotification
+local BaseLspNotification = {
+  spinner = 1,
+  ---@type {integer: BaseLspClient}
+  clients = {},
+  notification = nil,
+  window = nil
+}
+
+---@return BaseLspNotification
+function BaseLspNotification:new()
+  return vim.deepcopy(BaseLspNotification)
+end
+
+function BaseLspNotification:count_clients()
+  local count = 0
+  for _ in pairs(self.clients) do
+    count = count + 1
+  end
+  return count
+end
+
+function BaseLspNotification:notification_start()
   self.notification = options.notify(
-    "Started",
+    "",
     vim.log.levels.INFO,
     {
       title = self:format_title(),
@@ -89,8 +131,8 @@ function BaseLspNotification:__notification_start()
   )
 end
 
-function BaseLspNotification:__notification_progress()
-  local message = self:format_message()
+function BaseLspNotification:notification_progress()
+  local message = self:format()
   self.notification = options.notify(
     message,
     vim.log.levels.INFO,
@@ -102,14 +144,14 @@ function BaseLspNotification:__notification_progress()
   if self.window then
     vim.api.nvim_win_set_height(
       self.window,
-      2 + select(2, message:gsub('\n', '\n'))
+      3 + select(2, message:gsub('\n', '\n'))
     )
   end
 end
 
-function BaseLspNotification:__notification_end()
+function BaseLspNotification:notification_end()
   options.notify(
-    "Completed",
+    self:format(),
     vim.log.levels.INFO,
     {
       replace = self.notification,
@@ -117,49 +159,60 @@ function BaseLspNotification:__notification_end()
       timeout = 1000
     }
   )
-  self.notification = nil
-  self.spinner = nil
-
   if self.window then
     vim.api.nvim_win_set_height(
       self.window,
       3
     )
   end
+
+  self.notification = nil
+  self.spinner = nil
+  self.window = nil
 end
 
 function BaseLspNotification:update()
   if not self.notification then
-    self:__notification_start()
-  elseif self:__get_number_tasks() > 0 then
-    self:__notification_progress()
-  elseif self:__get_number_tasks() == 0 then
-    self:__notification_end()
+    self:notification_start()
+  elseif self:count_clients() > 0 then
+    self:notification_progress()
+  elseif self:count_clients() == 0 then
+    self:notification_end()
   end
 end
 
+function BaseLspNotification:schedule_kill_task(client_id, task_id)
+  vim.defer_fn(function()
+    local client = self.clients[client_id]
+    client:kill_task(task_id)
+    self:update()
 
-function BaseLspNotification:get_task(task_id)
-  self.tasks[task_id] =
-    self.tasks[task_id]
-    or {
-      title = "",
-      message = "",
-      percentage = 0
-    }
-  return self.tasks[task_id]
+    if client:count_tasks() == 0 then
+      vim.defer_fn(function()
+        if client:count_tasks() == 0 then
+          self.clients[client_id] = nil
+          self:update()
+        end
+      end, 2000)
+    end
+
+  end, 1000)
 end
 
-function BaseLspNotification:schedule_kill_task(task_id)
-  vim.defer_fn(
-    function()
-      self.tasks[task_id] = nil
-      self:update()
-    end,
-    1000
-  )
+function BaseLspNotification:format_title()
+  return "LSP progress"
 end
 
+function BaseLspNotification:format()
+  local clients = ""
+  for _, c in pairs(self.clients) do
+    clients = clients .. c:format() .. "\n"
+  end
+
+  return clients ~= "" and clients:sub(1, -2) or "Complete"
+end
+
+--#endregion
 
 
 -- TODO Move to BaseLspNotification
@@ -181,51 +234,36 @@ local function update_spinner(notification)
 end
 
 
----@type {integer: BaseLspNotification}
-local notifications = {}
 
----@param client_id integer
----@return BaseLspNotification
-local function get_notification(client_id)
-  notifications[client_id] =
-    notifications[client_id]
-    or BaseLspNotification.new(
-      client_id,
-      vim.lsp.get_client_by_id(client_id).name
-    )
-  return notifications[client_id]
-end
+---#region Handlers
 
-
+local notification = BaseLspNotification:new()
 
 local function handle_progress(_, result, context)
   local value = result.value
 
   local client_id = context.client_id
-  local notification = get_notification(client_id)
+  notification.clients[client_id] =
+    notification.clients[client_id]
+    or BaseLspClient.new(vim.lsp.get_client_by_id(client_id).name)
+  local client = notification.clients[client_id]
 
   local task_id = result.token
-  local task = notification:get_task(task_id)
+  client.tasks[task_id] =
+    client.tasks[task_id]
+    or BaseLspTask.new(value.title, value.message)
+  local task = client.tasks[task_id]
 
-  if value.kind == "begin" then
-    task.title = value.title
-    task.message = value.message
-
-    notification:update()
-
-  elseif value.kind == "report" then
+  if value.kind == "report" then
     task.message = value.message
     task.percentage = value.percentage
-
-    notification:update()
-
   elseif value.kind == "end" then
     task.message = value.message
     task.percentage = task.percentage and 100 or nil
-
-    notification:update()
-    notification:schedule_kill_task(task_id)
+    notification:schedule_kill_task(client_id, task_id)
   end
+
+  notification:update()
 end
 
 local function handle_message(err, method, params, client_id)
@@ -239,6 +277,9 @@ local function handle_message(err, method, params, client_id)
   options.notify(method.message, severity[params.type], { title = "LSP" })
 end
 
+--#endregion
+
+--#region Setup
 
 local function init()
   if vim.lsp.handlers["$/progress"] then
@@ -265,3 +306,5 @@ return {
     init()
   end
 }
+
+--#endregion
