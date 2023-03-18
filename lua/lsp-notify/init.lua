@@ -40,7 +40,7 @@ function BaseLspTask:format()
       "%-8s",
       self.percentage and self.percentage .. "%" or ""
     ))
-    .. (self.title .. " " or "")
+    .. (self.title and self.title .. " " or "")
     .. (self.message or "")
   )
 end
@@ -174,6 +174,8 @@ end
 function BaseLspNotification:update()
   if not self.notification then
     self:notification_start()
+    self.spinner = 1
+    self:spinner_start()
   elseif self:count_clients() > 0 then
     self:notification_progress()
   elseif self:count_clients() == 0 then
@@ -212,28 +214,23 @@ function BaseLspNotification:format()
   return clients ~= "" and clients:sub(1, -2) or "Complete"
 end
 
---#endregion
+function BaseLspNotification:spinner_start()
+  if self.spinner and options.icons and options.icons.spinner then
+    self.spinner = (self.spinner % #options.icons.spinner) + 1
 
-
--- TODO Move to BaseLspNotification
----@param notification BaseLspNotification
-local function update_spinner(notification)
-  if notification.spinner then
-    notification.spinner = (notification.spinner % #options.icons.spinner) + 1
-
-    notification.notification = options.notify(nil, nil, {
+    self.notification = options.notify(nil, nil, {
       hide_from_history = true,
-      icon = options.icons.spinner[notification.spinner],
-      replace = notification.notification,
+      icon = options.icons.spinner[self.spinner],
+      replace = self.notification,
     })
 
     vim.defer_fn(function()
-      update_spinner(notification)
+      self:spinner_start()
     end, 100)
   end
 end
 
-
+--#endregion
 
 ---#region Handlers
 
@@ -259,7 +256,6 @@ local function handle_progress(_, result, context)
     task.percentage = value.percentage
   elseif value.kind == "end" then
     task.message = value.message
-    task.percentage = task.percentage and 100 or nil
     notification:schedule_kill_task(client_id, task_id)
   end
 
