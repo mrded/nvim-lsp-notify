@@ -40,7 +40,8 @@ function BaseLspTask:format()
       "%-8s",
       self.percentage and self.percentage .. "%" or ""
     ))
-    .. (self.title and self.title .. " " or "")
+    .. (self.title or "")
+    .. (self.title and self.message and " - " or "")
     .. (self.message or "")
   )
 end
@@ -255,7 +256,7 @@ local function handle_progress(_, result, context)
     task.message = value.message
     task.percentage = value.percentage
   elseif value.kind == "end" then
-    task.message = value.message
+    task.message = value.message or "Complete"
     notification:schedule_kill_task(client_id, task_id)
   end
 
