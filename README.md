@@ -8,9 +8,9 @@ The motivation was to address the uncertainty that can sometimes accompany using
 I wanted to create a solution that would provide better visibility into the LSP's processes.
 
 ### Examples
-![image](https://user-images.githubusercontent.com/347098/212483632-d8a4a6d7-320e-4002-b263-6e736ac83c1d.png)
-![image](https://user-images.githubusercontent.com/347098/212483720-e6c7b782-1aa1-49ad-b45a-8502b2b9cbf5.png)
-![image](https://user-images.githubusercontent.com/347098/212483653-e1fb1f5a-5826-400a-b79e-cba754e4fe2e.png)
+
+![null-ls and lua-ls](https://user-images.githubusercontent.com/44075969/226129296-a7997008-9163-4b42-9b91-04d2816620f7.gif)
+![null-ls and rust-analyzer](https://user-images.githubusercontent.com/44075969/226129502-ff6a14b9-42ba-45ec-94e4-45ac900c23f6.gif)
 
 ### Optional dependencies
 

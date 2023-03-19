@@ -1,88 +1,311 @@
----@type LspNotifyConfig
-local options = nil
+--- Options for the plugin
+---@class LspNotifyConfig
+local options = {
+  notify = vim.notify,
+  ---@type {spinner: string[] | false, done: string | false} | false
+  icons = {
+    spinner = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
+    done = "󰗡"
+  }
+}
+local supports_replace = false
 
-local client_notifs = {}
 
-local function get_notif_data(client_id, token)
-  if not client_notifs[client_id] then
-    client_notifs[client_id] = {}
-  end
-
-  if not client_notifs[client_id][token] then
-    client_notifs[client_id][token] = {}
-  end
-
-  return client_notifs[client_id][token]
+local function check_supports_replace()
+  local n = options.notify(
+    "",
+    nil,
+    {
+      hide_from_history = true,
+      on_open = function(window)
+        vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(false, true))
+        vim.api.nvim_win_set_config(
+          window, {
+            width = 1, height = 1,
+            border = "none",
+            relative = "editor",
+            row = 0,
+            col = 0
+          }
+        )
+      end,
+      timeout = 1,
+      animate = false
+    }
+  )
+  local supports = pcall(options.notify, nil, nil, { replace = n })
+  return supports
 end
 
-local function update_spinner(client_id, token)
-  local notif_data = get_notif_data(client_id, token)
 
-  if notif_data.spinner then
-    notif_data.spinner = (notif_data.spinner % #options.icons.spinner) + 1
 
-    notif_data.notification = options.notify(nil, nil, {
+--#region Task
+
+---@class BaseLspTask
+local BaseLspTask = {
+  ---@type string?
+  title = "",
+  ---@type string?
+  message = "",
+  ---@type number?
+  percentage = nil
+}
+
+---@param title string
+---@param message string
+---@return BaseLspTask
+function BaseLspTask.new(title, message)
+  local self = vim.deepcopy(BaseLspTask)
+  self.title = title
+  self.message = message
+  return self
+end
+
+function BaseLspTask:format()
+  return (
+    ("  ")
+    .. (string.format(
+      "%-8s",
+      self.percentage and self.percentage .. "%" or ""
+    ))
+    .. (self.title or "")
+    .. (self.title and self.message and " - " or "")
+    .. (self.message or "")
+  )
+end
+
+--#endregion
+
+--#region Client
+
+---@class BaseLspClient
+local BaseLspClient = {
+  name = "",
+  ---@type {any: BaseLspTask}
+  tasks = {}
+}
+
+---@param name string
+---@return BaseLspClient
+function BaseLspClient.new(name)
+  local self = vim.deepcopy(BaseLspClient)
+  self.name = name
+  return self
+end
+
+function BaseLspClient:count_tasks()
+  local count = 0
+  for _ in pairs(self.tasks) do
+    count = count + 1
+  end
+  return count
+end
+
+function BaseLspClient:kill_task(task_id)
+  self.tasks[task_id] = nil
+end
+
+function BaseLspClient:format()
+  local tasks = ""
+  for _, t in pairs(self.tasks) do
+    tasks = tasks .. t:format() .. "\n"
+  end
+
+  return (
+    (self.name)
+    .. ("\n")
+    .. (tasks ~= "" and tasks:sub(1, -2) or "  Complete")
+  )
+end
+
+--#endregion
+
+--#region Notification
+
+---@class BaseLspNotification
+local BaseLspNotification = {
+  spinner = 1,
+  ---@type {integer: BaseLspClient}
+  clients = {},
+  notification = nil,
+  window = nil
+}
+
+---@return BaseLspNotification
+function BaseLspNotification:new()
+  return vim.deepcopy(BaseLspNotification)
+end
+
+function BaseLspNotification:count_clients()
+  local count = 0
+  for _ in pairs(self.clients) do
+    count = count + 1
+  end
+  return count
+end
+
+function BaseLspNotification:notification_start()
+  self.notification = options.notify(
+    "",
+    vim.log.levels.INFO,
+    {
+      title = self:format_title(),
+      icon = (options.icons and options.icons.spinner and options.icons.spinner[1]) or nil,
+      timeout = false,
+      hide_from_history = false,
+      on_open = function(window)
+        self.window = window
+      end
+    }
+  )
+  if not supports_replace then
+    self.notification = true
+  end
+end
+
+function BaseLspNotification:notification_progress()
+  local message = self:format()
+  local message_lines = select(2, message:gsub('\n', '\n'))
+
+  if supports_replace then
+    self.notification = options.notify(
+      message,
+      vim.log.levels.INFO,
+      {
+        replace = self.notification,
+        hide_from_history = false,
+      }
+    )
+    if self.window then
+      vim.api.nvim_win_set_height(
+        self.window,
+        3 + message_lines
+      )
+    end
+  else
+    for line in message:gmatch("[^\r\n]+") do
+      options.notify(
+        line,
+        vim.log.levels.INFO
+      )
+    end
+  end
+end
+
+function BaseLspNotification:notification_end()
+  options.notify(
+    self:format(),
+    vim.log.levels.INFO,
+    {
+      replace = self.notification,
+      icon = options.icons and options.icons.done or nil,
+      timeout = 1000
+    }
+  )
+  if self.window then
+    vim.api.nvim_win_set_height(
+      self.window,
+      3
+    )
+  end
+
+  self.notification = nil
+  self.spinner = nil
+  self.window = nil
+end
+
+function BaseLspNotification:update()
+  if not self.notification then
+    self:notification_start()
+    self.spinner = 1
+    self:spinner_start()
+  elseif self:count_clients() > 0 then
+    self:notification_progress()
+  elseif self:count_clients() == 0 then
+    self:notification_end()
+  end
+end
+
+function BaseLspNotification:schedule_kill_task(client_id, task_id)
+  vim.defer_fn(function()
+    local client = self.clients[client_id]
+    client:kill_task(task_id)
+    self:update()
+
+    if client:count_tasks() == 0 then
+      vim.defer_fn(function()
+        if client:count_tasks() == 0 then
+          self.clients[client_id] = nil
+          self:update()
+        end
+      end, 2000)
+    end
+
+  end, 1000)
+end
+
+function BaseLspNotification:format_title()
+  return "LSP progress"
+end
+
+function BaseLspNotification:format()
+  local clients = ""
+  for _, c in pairs(self.clients) do
+    clients = clients .. c:format() .. "\n"
+  end
+
+  return clients ~= "" and clients:sub(1, -2) or "Complete"
+end
+
+function BaseLspNotification:spinner_start()
+  if supports_replace and self.spinner and options.icons and options.icons.spinner then
+    self.spinner = (self.spinner % #options.icons.spinner) + 1
+
+    self.notification = options.notify(nil, nil, {
       hide_from_history = true,
-      icon = options.icons.spinner[notif_data.spinner],
-      replace = notif_data.notification,
+      icon = options.icons.spinner[self.spinner],
+      replace = self.notification,
     })
 
     vim.defer_fn(function()
-      update_spinner(client_id, token)
+      self:spinner_start()
     end, 100)
   end
 end
 
+--#endregion
 
-vim.lsp.handlers["$/progress"] = function(_, result, ctx)
-  local val = result.value
+---#region Handlers
 
-  if not val.kind then
-    return
+local notification = BaseLspNotification:new()
+
+local function handle_progress(_, result, context)
+  local value = result.value
+
+  local client_id = context.client_id
+  notification.clients[client_id] =
+    notification.clients[client_id]
+    or BaseLspClient.new(vim.lsp.get_client_by_id(client_id).name)
+  local client = notification.clients[client_id]
+
+  local task_id = result.token
+  client.tasks[task_id] =
+    client.tasks[task_id]
+    or BaseLspTask.new(value.title, value.message)
+  local task = client.tasks[task_id]
+
+  if value.kind == "report" then
+    task.message = value.message
+    task.percentage = value.percentage
+  elseif value.kind == "end" then
+    task.message = value.message or "Complete"
+    notification:schedule_kill_task(client_id, task_id)
   end
 
-  local client_id = ctx.client_id
-
-  local notif_data = get_notif_data(client_id, result.token)
-
-  if val.kind == "begin" then
-    local message = val.message or "Loading..."
-    local title = val.title or vim.lsp.get_client_by_id(client_id).name or "Notification"
-
-    notif_data.notification = options.notify(message, "info", {
-      title = title,
-      icon = (options.icons and options.icons.spinner) and options.icons.spinner[1] or nil,
-      timeout = false,
-      hide_from_history = false,
-    })
-
-    if options.icons and options.icons.spinner then
-      notif_data.spinner = 1
-      update_spinner(client_id, result.token)
-    end
-
-  elseif val.kind == "report" and notif_data then
-    local message = (val.percentage and val.percentage .. "%\t" or "") .. (val.message or "")
-
-    notif_data.notification = options.notify(message, "info", {
-      replace = notif_data.notification,
-      hide_from_history = false,
-    })
-
-  elseif val.kind == "end" and notif_data then
-    local message = val.message or "Complete"
-
-    notif_data.notification = options.notify(message, "info", {
-      icon = options.icons and options.icons.done or nil,
-      replace = notif_data.notification,
-      timeout = 3000,
-    })
-
-    notif_data.spinner = nil
-  end
+  notification:update()
 end
 
-vim.lsp.handlers["window/showMessage"] = function(err, method, params, client_id)
+local function handle_message(err, method, params, client_id)
   -- table from lsp severity to vim severity.
   local severity = {
     "error",
@@ -93,19 +316,36 @@ vim.lsp.handlers["window/showMessage"] = function(err, method, params, client_id
   options.notify(method.message, severity[params.type], { title = "LSP" })
 end
 
----@class LspNotifyConfig
-local default_options = {
-  notify = vim.notify,
-  ---@type {spinner: string[] | false, done: string | false} | false
-  icons = {
-    spinner = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
-    done = "󰗡"
-  }
-}
+--#endregion
+
+--#region Setup
+
+local function init()
+  if vim.lsp.handlers["$/progress"] then
+    local handler = vim.lsp.handlers["$/progress"]
+    vim.lsp.handlers["$/progress"] = function(...)
+      handler(...)
+      handle_progress(...)
+    end
+  end
+
+  if vim.lsp.handlers["window/showMessage"] then
+    local handler = vim.lsp.handlers["window/showMessage"]
+    vim.lsp.handlers["window/showMessage"] = function(...)
+      handler(...)
+      handle_message(...)
+    end
+  end
+end
 
 return {
   ---@param opts LspNotifyConfig?
   setup = function(opts)
-    options = vim.tbl_deep_extend("force", default_options, opts or {})
+    options = vim.tbl_deep_extend("force", options, opts or {})
+    supports_replace = check_supports_replace()
+
+    init()
   end
 }
+
+--#endregion
