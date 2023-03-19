@@ -8,6 +8,34 @@ local options = {
     done = "󰗡"
   }
 }
+local supports_replace = false
+
+
+local function check_supports_replace()
+  local n = options.notify(
+    "",
+    nil,
+    {
+      hide_from_history = true,
+      on_open = function(window)
+        vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(false, true))
+        vim.api.nvim_win_set_config(
+          window, {
+            width = 1, height = 1,
+            border = "none",
+            relative = "editor",
+            row = 0,
+            col = 0
+          }
+        )
+      end,
+      timeout = 1,
+      animate = false
+    }
+  )
+  local supports = pcall(options.notify, nil, nil, { replace = n })
+  return supports
+end
 
 
 
@@ -130,23 +158,37 @@ function BaseLspNotification:notification_start()
       end
     }
   )
+  if not supports_replace then
+    self.notification = true
+  end
 end
 
 function BaseLspNotification:notification_progress()
   local message = self:format()
-  self.notification = options.notify(
-    message,
-    vim.log.levels.INFO,
-    {
-      replace = self.notification,
-      hide_from_history = false,
-    }
-  )
-  if self.window then
-    vim.api.nvim_win_set_height(
-      self.window,
-      3 + select(2, message:gsub('\n', '\n'))
+  local message_lines = select(2, message:gsub('\n', '\n'))
+
+  if supports_replace then
+    self.notification = options.notify(
+      message,
+      vim.log.levels.INFO,
+      {
+        replace = self.notification,
+        hide_from_history = false,
+      }
     )
+    if self.window then
+      vim.api.nvim_win_set_height(
+        self.window,
+        3 + message_lines
+      )
+    end
+  else
+    for line in message:gmatch("[^\r\n]+") do
+      options.notify(
+        line,
+        vim.log.levels.INFO
+      )
+    end
   end
 end
 
@@ -216,7 +258,7 @@ function BaseLspNotification:format()
 end
 
 function BaseLspNotification:spinner_start()
-  if self.spinner and options.icons and options.icons.spinner then
+  if supports_replace and self.spinner and options.icons and options.icons.spinner then
     self.spinner = (self.spinner % #options.icons.spinner) + 1
 
     self.notification = options.notify(nil, nil, {
@@ -300,6 +342,8 @@ return {
   ---@param opts LspNotifyConfig?
   setup = function(opts)
     options = vim.tbl_deep_extend("force", options, opts or {})
+    supports_replace = check_supports_replace()
+
     init()
   end
 }
