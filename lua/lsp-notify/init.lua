@@ -15,7 +15,7 @@ local options = {
     spinner = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
     --- Icon to show when done.
     --- Can be set to `= false` to disable only spinner.
-    done = "󰗡"
+    done = "✓"
   }
 }
 
