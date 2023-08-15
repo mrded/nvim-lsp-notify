@@ -6,6 +6,9 @@ local options = {
   --- If no, you can manually pass `= require('notify')` here.
   notify = vim.notify,
 
+  --- Exclude by client name.
+  excludes = {},
+
   --- Icons.
   --- Can be set to `= false` to disable.
   ---@type {spinner: string[] | false, done: string | false} | false
@@ -317,16 +320,32 @@ end
 
 ---#region Handlers
 
+local function has_value (tab, val)
+    for _, value in ipairs(tab) do
+        if value == val then
+            return true
+        end
+    end
+
+    return false
+end
+
 local notification = BaseLspNotification:new()
 
 local function handle_progress(_, result, context)
   local value = result.value
 
   local client_id = context.client_id
+  local client_name = vim.lsp.get_client_by_id(client_id).name
+
+  if has_value(options.excludes,client_name) then
+    return 
+  end
+
   -- Get client info from notification or generate it
   notification.clients[client_id] =
     notification.clients[client_id]
-    or BaseLspClient.new(vim.lsp.get_client_by_id(client_id).name)
+    or BaseLspClient.new(client_name)
   local client = notification.clients[client_id]
 
   local task_id = result.token
