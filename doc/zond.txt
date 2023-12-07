@@ -13,6 +13,7 @@ setup({opts})                                               *lsp-notify.setup()*
     Options: ~
         {notify}              (function)      function to show the notification
                                               (default: 'vim.notify')
+        {excludes}            (array)         Exclude by client name.
         {icons}               (table|false)   icons to display or 'false' to
                                               disable
                                               (default: {
