@@ -27,8 +27,8 @@ local supports_replace = false
 ---@return boolean suppors
 local function check_supports_replace()
   local n = options.notify(
-    "",
-    nil,
+    "lsp notify: test replace support",
+    vim.log.levels.DEBUG,
     {
       hide_from_history = true,
       on_open = function(window)
@@ -49,7 +49,7 @@ local function check_supports_replace()
       animate = false
     }
   )
-  local supports = pcall(options.notify, nil, nil, { replace = n })
+  local supports = pcall(options.notify, "lsp notify: test replace support", vim.log.levels.DEBUG, { replace = n })
   return supports
 end
 
