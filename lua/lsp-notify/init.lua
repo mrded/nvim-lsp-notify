@@ -27,7 +27,7 @@ local options = {
 local supports_replace = false
 
 --- Check if current notification system supports replacing notifications.
----@return boolean suppors
+---@return boolean supports
 local function check_supports_replace()
   local n = options.notify(
     "lsp notify: test replace support",
