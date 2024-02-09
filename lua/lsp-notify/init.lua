@@ -27,7 +27,7 @@ local options = {
 local supports_replace = false
 
 --- Check if current notification system supports replacing notifications.
----@return boolean suppors
+---@return boolean supports
 local function check_supports_replace()
   local n = options.notify(
     "lsp notify: test replace support",
@@ -196,12 +196,17 @@ function BaseLspNotification:notification_progress()
       {
         replace = self.notification,
         hide_from_history = false,
+        on_close = function()
+          self.notification = nil
+          self.window = nil
+        end
       }
     )
     if self.window then
       -- Update height because `nvim-notify` notifications don't do it automatically
       -- Can cover other notifications
-      vim.api.nvim_win_set_height(
+      pcall(
+        vim.api.nvim_win_set_height,
         self.window,
         3 + message_lines
       )
@@ -226,7 +231,11 @@ function BaseLspNotification:notification_end()
     {
       replace = self.notification,
       icon = options.icons and options.icons.done or nil,
-      timeout = 1000
+      timeout = 1000,
+      on_close = function()
+        self.notification = nil
+        self.window = nil
+      end
     }
   )
   if self.window then
@@ -303,13 +312,21 @@ function BaseLspNotification:spinner_start()
           hide_from_history = true,
           icon = options.icons.spinner[self.spinner],
           replace = self.notification,
+          on_close = function()
+            self.notification = nil
+            self.window = nil
+          end
         }
       )
     end
 
     -- Trigger new spinner frame
     vim.defer_fn(function()
-      self:spinner_start()
+      -- We need to pcall here because passing `nil` as a message sometimes trigger an error
+      -- If we pass an empty string as nvim-notify wants, it'll flicker
+      pcall(function()
+        self:spinner_start()
+      end)
     end, 100)
   end
 end
