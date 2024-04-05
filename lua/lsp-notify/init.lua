@@ -9,6 +9,11 @@ local options = {
   --- Exclude by client name.
   excludes = {},
 
+  disable = {
+    progress = false,
+    show_message = false,
+  },
+
   --- Icons.
   --- Can be set to `= false` to disable.
   ---@type {spinner: string[] | false, done: string | false} | false
@@ -27,7 +32,7 @@ local options = {
 local supports_replace = false
 
 --- Check if current notification system supports replacing notifications.
----@return boolean suppors
+---@return boolean supports
 local function check_supports_replace()
   local n = options.notify(
     "lsp notify: test replace support",
@@ -387,26 +392,30 @@ end
 --#region Setup
 
 local function init()
-  if vim.lsp.handlers["$/progress"] then
-    -- There was already a handler, execute it too
-    local old = vim.lsp.handlers["$/progress"]
-    vim.lsp.handlers["$/progress"] = function(...)
-      old(...)
-      handle_progress(...)
+  if not options.disable.progress then
+    if vim.lsp.handlers["$/progress"] then
+      -- There was already a handler, execute it too
+      local old = vim.lsp.handlers["$/progress"]
+      vim.lsp.handlers["$/progress"] = function(...)
+        old(...)
+        handle_progress(...)
+      end
+    else
+      vim.lsp.handlers["$/progress"] = handle_progress
     end
-  else
-    vim.lsp.handlers["$/progress"] = handle_progress
   end
 
-  if vim.lsp.handlers["window/showMessage"] then
-    -- There was already a handler, execute it too
-    local old = vim.lsp.handlers["window/showMessage"]
-    vim.lsp.handlers["window/showMessage"] = function(...)
-      old(...)
-      handle_message(...)
+  if not options.disable.show_message then
+    if vim.lsp.handlers["window/showMessage"] then
+      -- There was already a handler, execute it too
+      local old = vim.lsp.handlers["window/showMessage"]
+      vim.lsp.handlers["window/showMessage"] = function(...)
+        old(...)
+        handle_message(...)
+      end
+    else
+      vim.lsp.handlers["window/showMessage"] = handle_message
     end
-  else
-    vim.lsp.handlers["window/showMessage"] = handle_message
   end
 end
 
