@@ -259,6 +259,10 @@ function BaseLspNotification:schedule_kill_task(client_id, task_id)
   -- Wait a bit before hiding the task to show that it's complete
   vim.defer_fn(function()
     local client = self.clients[client_id]
+    if not client then
+      self:update()
+      return
+    end
     client:kill_task(task_id)
     self:update()
 
