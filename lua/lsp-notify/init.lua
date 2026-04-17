@@ -27,33 +27,24 @@ local options = {
 local supports_replace = false
 
 --- Check if current notification system supports replacing notifications.
----@return boolean suppors
+---@return boolean supports
 local function check_supports_replace()
+  -- nvim-notify returns a notification record (non-nil) when called,
+  -- while the built-in vim.notify returns nil.
+  -- We detect replace support by checking the return value rather than
+  -- attempting an actual replace, because the replace attempt causes a race
+  -- condition with nvim-notify's async processing, resulting in a
+  -- "No matching notification found to replace" error shown on startup.
   local n = options.notify(
     "lsp notify: test replace support",
     vim.log.levels.DEBUG,
     {
       hide_from_history = true,
-      on_open = function(window)
-        -- If window is hidden, `nvim-notify` prints errors
-        -- This shrinks notifications and puts it in a corner where it will not be seen
-        vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(false, true))
-        vim.api.nvim_win_set_config(
-          window, {
-            width = 1, height = 1,
-            border = "none",
-            relative = "editor",
-            row = 0,
-            col = 0
-          }
-        )
-      end,
       timeout = 1,
       animate = false
     }
   )
-  local supports = pcall(options.notify, "lsp notify: test replace support", vim.log.levels.DEBUG, { replace = n })
-  return supports
+  return n ~= nil
 end
 
 
